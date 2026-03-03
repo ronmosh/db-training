@@ -7,37 +7,53 @@ Your team leader has reviewed the current structure and wants you to implement t
 ## Part 1: Bug Fixes and Small Adjustments
 
 1. **Remove a Column**
-   * **Task:** The team leader wants to remove the `bio` column from the `authors` table. 
-   * **Action:** Update the SQLAlchemy model, the Pydantic entities, and generate an Alembic migration for this removal.
+   * **Task:** The team leader wants us to drop the `bio` column from authors. 
+   * **Action:** Safely remove this field across all application layers and run a migration to drop it from the database schema.
 
 2. **Change Field to Enum**
-   * **Task:** We need to categorize books. Add a `category` field to the `books` table, but it should be a strict PostgreSQL `ENUM` type (e.g., `'FICTION'`, `'NON_FICTION'`, `'SCIENCE'`). 
-   * **Action:** Update the model to use `sqlalchemy.Enum`, add the field to Pydantic entities, and generate the Alembic migration.
+   * **Task:** We need a way to categorize our books. Add a `category` field to the books table.
+   * **Action:** The column must enforce a strict Postgres Enum type (e.g. `'FICTION'`, `'NON_FICTION'`, `'SCIENCE'`). Update the DB schema and request structures accordingly.
 
-3. **Fix the N+1 Books Problem**
-   * **Task:** When fetching an author, we also want to display their books. However, right now it either doesn't return them or executes a new query for every author.
-   * **Action:** Fix this by modifying the repository to use `joinedload` for the `books` relationship and update the response entity to include a list of books.
+3. **Fix the N+1 Query**
+   * **Task:** When fetching authors (`GET /authors`), the system executes a separate query to retrieve books for *every* individual author.
+   * **Action:** Optimize the query in the repository so both authors and their books are retrieved efficiently in a single database round-trip.
 
-4. **Add Data Validation**
-   * **Task:** The `POST /books` endpoint currently allows saving a book even if the `author_id` doesn't exist in the database, which causes a 500 integrity error.
-   * **Action:** Fix this bug in `services/book.py` by checking if the author exists *before* attempting to create the book. If not found, raise a `404 Not Found` HTTP exception.
+4. **Foreign Key Error Handling**
+   * **Task:** The `POST /books` API does not elegantly handle scenarios where an author doesn't exist. It currently results in a 500 server error when PostgreSQL rejects the foreign key.
+   * **Action:** Update the book creation flow to validate the author's existence before saving, returning a clean 404 HTTP exception instead.
 
 ---
 
 ## Part 2: Feature Requests
 
 1. **Filter by Column**
-   * **Task:** Have a way to get all the Entity A that has X in this column. 
-   * **Action:** Add a new endpoint `GET /authors/search` that takes a query parameter `name_prefix` and returns all authors whose name starts with that prefix.
+   * **Task:** A dashboard requires finding authors by name prefix (e.g., "J.R.").
+   * **Action:** Create a search endpoint returning a list of entities matching the requested `name_prefix`. 
 
 2. **Pagination Strategy**
-   * **Task:** The `GET /books` endpoint might return too many records in the future.
-   * **Action:** Implement pagination for the `GET /books` endpoint. Add `skip` and `limit` query parameters, ensuring `limit` has a max constraint of 100. Update the repository to handle offset and limit.
+   * **Task:** The `GET /books` endpoint currently returns the entire table.
+   * **Action:** Implement a standard pagination approach for this endpoint (skip, limit). Make sure to restrict the maximum returned rows per request to avoid overwhelming the system.
 
 3. **Soft Deletes**
-   * **Task:** We don't want to completely delete authors from the database, but we want a way to "remove" them.
-   * **Action:** Add an `is_deleted` boolean column to the `authors` table (default `False`). Create an endpoint `DELETE /authors/{id}` that sets this flag to `True`. Make sure all `GET` operations filter out deleted authors.
+   * **Task:** Provide a safe deletion mechanism for authors.
+   * **Action:** Update the authors table to support soft deletes. Write an endpoint to perform the soft deletion, and ensure all existing author retrieval endpoints automatically ignore soft-deleted records.
 
 4. **Aggregate Data Endpoint**
-   * **Task:** The dashboard needs to know how many books each author has.
-   * **Action:** Create an endpoint `GET /authors/stats` that returns a list of authors along with a `book_count` field. Implement this optimally in the repository using SQL `GROUP BY` rather than counting in Python.
+   * **Task:** We need a report showing the total number of books per author.
+   * **Action:** Expose an endpoint `GET /authors/stats` that efficiently computes this count. The computation should be offloaded completely to the database engine rather than counted in-memory.
+
+---
+
+## Part 3: Advanced Challenges
+
+1. **Loop Insert Optimization**
+   * **Task:** The marketing department has requested a bulk upload feature `POST /books/bulk` allowing them to upload 500 books at once.
+   * **Action:** Your initial goal: write a naive implementation that loops over the payload and creates/commits each record individually. Then, document why this is bad, and implement a highly optimized bulk insert operation bypassing the ORM's heavy object tracking constraints.
+
+2. **Many-to-Many Relationships**
+   * **Task:** A single book can now have multiple tags, and tags can belong to multiple books.
+   * **Action:** Design and implement a Many-to-Many relationship (creating the necessary join table via Alembic). Expose endpoints to assign tags to a book and to fetch tags for a book.
+
+3. **Database Triggers**
+   * **Task:** All tables should track when their records were last modified.
+   * **Action:** Add an `updated_at` timestamp column to the authors table. Use Alembic to cleanly register a PostgreSQL trigger that automatically sets this timestamp on every row update. The logic must reside entirely in the database engine, not in the application.

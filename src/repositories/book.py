@@ -15,6 +15,17 @@ class BookRepository:
         db.commit()
         db.refresh(db_book)
         return db_book
+
+    def create_bulk(self, db: Session, books_data: list[BookCreate]):
+        # Intentional slow loop implementation for the trainee to optimize
+        created_books = []
+        for book in books_data:
+            db_book = Book(title=book.title, author_id=book.author_id)
+            db.add(db_book)
+            db.commit()
+            db.refresh(db_book)
+            created_books.append(db_book)
+        return created_books
     
     def get_by_author(self, db: Session, author_id: int):
         return db.query(Book).filter(Book.author_id == author_id).all()

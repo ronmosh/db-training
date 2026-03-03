@@ -4,7 +4,11 @@ from object.author import AuthorCreate
 
 class AuthorRepository:
     def get_all(self, db: Session):
-        return db.query(Author).all()
+        authors = db.query(Author).all()
+        # Intentional N+1 loop for the trainee to find and fix
+        for author in authors:
+            author.books = author.books
+        return authors
 
     def get_by_id(self, db: Session, author_id: int):
         return db.query(Author).filter(Author.id == author_id).first()

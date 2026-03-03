@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
+from .book import BookResponse
 
 class AuthorBase(BaseModel):
     name: str
@@ -10,6 +11,7 @@ class AuthorCreate(AuthorBase):
 
 class AuthorResponse(AuthorBase):
     id: int
+    books: List[BookResponse] = []
 
     class Config:
         from_attributes = True
